@@ -22,8 +22,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 COPY . .
 
-# Expose opcional (Cloud Run ignora mas ajuda local)
 EXPOSE 8080
 
-# Usa a variável PORT do ambiente
 CMD exec streamlit run app.py --server.port=${PORT:-8080} --server.address=0.0.0.0
