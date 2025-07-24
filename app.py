@@ -244,11 +244,12 @@ if not df.empty:
         st.markdown("""
             <div class='kpi-box'>
                 <div class='kpi-title'>\U0001F4C8 Análise Mensal</div>
-        """, unsafe_allow_html=True)
+        """
+        , unsafe_allow_html=True)
         st.plotly_chart(fig3, use_container_width=True)
         st.markdown(f"<div style='text-align:center; font-size:14px;'>\U0001F389 Melhor desempenho: <b>{melhor_mes['mes']}</b> com <b>{melhor_mes['perc']:.1f}%</b> da meta atingida</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
-
+        
     st.markdown("<div class='export-button'>", unsafe_allow_html=True)
     output = BytesIO()
     df_export = df.copy()
