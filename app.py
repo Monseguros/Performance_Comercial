@@ -3,77 +3,90 @@ import pandas as pd
 from db import get_connection
 from utils import calcular_percentual
 import plotly.graph_objects as go
-import plotly.express as px
 from io import BytesIO
 
-# Cores suaves e estilo
-st.set_page_config(layout="wide")
+# Configuração da página
+st.set_page_config(page_title="Painel Comercial FFH", layout="wide")
+
+# Estilo customizado
 st.markdown("""
     <style>
-        body {
-            background-color: #F5F8FA;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Garamond');
+
+        html, body, [class*="css"] {
+            font-family: 'Inter', sans-serif;
+            background-color: #F1F5FA;
         }
+
+        .main-title {
+            text-align: center;
+            font-size: 36px;
+            font-weight: bold;
+            background: linear-gradient(90deg, #295148, #C1FBAD);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            padding-bottom: 1rem;
+            font-family: 'Garamond', serif;
+        }
+
         .kpi-box {
-            background-color: #ffffff;
+            background: linear-gradient(135deg, #CBCCBC, #F1F5FA);
+            border-left: 6px solid #192B23;
             border-radius: 15px;
             padding: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-            margin: 10px 0;
+            box-shadow: 2px 4px 10px rgba(0,0,0,0.05);
             transition: all 0.3s ease-in-out;
         }
+
         .kpi-box:hover {
             transform: scale(1.01);
         }
+
         .kpi-title {
             font-size: 18px;
+            font-weight: bold;
+            color: #192B23;
+            margin-bottom: 8px;
+        }
+
+        .kpi-meta, .kpi-resultado {
+            font-size: 16px;
             font-weight: 600;
-            color: #333;
-            margin-bottom: 8px;
         }
-        .kpi-meta {
+
+        .progress-highlight {
+            text-align:center;
             font-size: 16px;
-            color: #2C3E50;
             font-weight: bold;
+            color: #295148;
+            margin-top: 5px;
         }
-        .kpi-resultado {
-            font-size: 16px;
-            color: #16a085;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
+
         .export-button button {
-            background-color: #ffffff;
-            color: #333;
-            border: 1px solid #ccc;
-            padding: 0.5rem 1rem;
-            border-radius: 10px;
-            font-weight: bold;
-            transition: all 0.2s ease-in-out;
-        }
-        .export-button button:hover {
-            background-color: #16a085;
+            background-color: #295148;
             color: white;
-            border-color: #16a085;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
         }
-        .container-box {
-            background-color: #fff;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
+
+        .export-button button:hover {
+            background-color: #192B23;
+            color: #C1FBAD;
+        }
+
+        progress {
+            accent-color: #295148;
         }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-    <div class='container-box'>
-""", unsafe_allow_html=True)
-
-st.title("\U0001F680 Painel de Performance Comercial")
-
+# Conexão
 conn = get_connection()
 
-# Filtros separados com "Todos"
+# Filtros
 df_filtros = pd.read_sql("""
     SELECT DISTINCT 
         nome_comercial, 
@@ -83,20 +96,17 @@ df_filtros = pd.read_sql("""
     FROM vw_cadastro_metas
 """, conn)
 
-with st.container():
-    with st.expander("\U0001F9BC️ Filtros", expanded=True):
-        col1, col2, col3, col4 = st.columns(4)
-        nome_comercial = col1.selectbox("\U0001F464 Nome Comercial", ["Todos"] + sorted(df_filtros['nome_comercial'].dropna().unique().tolist()))
-        ano = col2.selectbox("\U0001F4C5 Ano", ["Todos"] + sorted(df_filtros['ano'].dropna().unique().astype(int).tolist(), reverse=True))
-        mes = col3.selectbox("\U0001F5D3️ Mês", ["Todos"] + sorted(df_filtros['mes'].dropna().str.strip().unique().tolist()))
-        descricao_meta = col4.selectbox("\U0001F3F7️ Categoria da Meta", ["Todos"] + sorted(df_filtros['descricao_meta'].dropna().unique().tolist()))
-
-        if st.button("\U0001F9F9", help="Limpar Filtros"):
-            st.session_state.clear()
-            st.rerun()
+# Inicializar estado dos filtros
+if 'filtros' not in st.session_state:
+    st.session_state.filtros = {
+        'nome_comercial': 'Todos',
+        'ano': 'Todos',
+        'mes': 'Todos',
+        'descricao_meta': 'Todos'
+    }
 
 # Query principal
-df = pd.read_sql("""
+df_raw = pd.read_sql("""
     SELECT
         cm.nome_comercial,
         cm.descricao_meta AS categoria,
@@ -112,18 +122,56 @@ df = pd.read_sql("""
        AND cm.competencia = rm.competencia
 """, conn)
 
-# Aplicar filtros
-if nome_comercial != "Todos":
-    df = df[df['nome_comercial'] == nome_comercial]
-if ano != "Todos":
-    df = df[df['ano'] == int(ano)]
-if mes != "Todos":
-    df = df[df['mes'].str.strip() == mes.strip()]
-if descricao_meta != "Todos":
-    df = df[df['categoria'] == descricao_meta]
+# Aplicar filtros salvos
+filtros = st.session_state.filtros
 
+df = df_raw.copy()
+if filtros['nome_comercial'] != "Todos":
+    df = df[df['nome_comercial'] == filtros['nome_comercial']]
+if filtros['ano'] != "Todos":
+    df = df[df['ano'] == int(filtros['ano'])]
+if filtros['mes'] != "Todos":
+    df = df[df['mes'].str.strip() == filtros['mes'].strip()]
+if filtros['descricao_meta'] != "Todos":
+    df = df[df['categoria'] == filtros['descricao_meta']]
+
+# Sidebar com logo, filtros e exportação
+with st.sidebar:
+    
+    st.image("vertical verde.png", width=120)
+
+
+    st.markdown("### Filtros")
+    nome_comercial = st.selectbox("Nome Comercial", ["Todos"] + sorted(df_filtros['nome_comercial'].dropna().unique().tolist()), index=0)
+    ano = st.selectbox("Ano", ["Todos"] + sorted(df_filtros['ano'].dropna().unique().astype(int).tolist(), reverse=True), index=0)
+    mes = st.selectbox("Mês", ["Todos"] + sorted(df_filtros['mes'].dropna().str.strip().unique().tolist()), index=0)
+    descricao_meta = st.selectbox("Categoria da Meta", ["Todos"] + sorted(df_filtros['descricao_meta'].dropna().unique().tolist()), index=0)
+
+    st.session_state.filtros = {
+        'nome_comercial': nome_comercial,
+        'ano': ano,
+        'mes': mes,
+        'descricao_meta': descricao_meta
+    }
+
+    st.markdown("<hr style='margin-top:30px;margin-bottom:10px;'>", unsafe_allow_html=True)
+    st.markdown("### Exportar Relatório")
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Relatorio')
+    st.download_button(
+        label="📁 Exportar XLSX",
+        data=output.getvalue(),
+        file_name="relatorio_metas.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+# Título
+st.markdown("<div class='main-title'>Painel de Performance Comercial</div>", unsafe_allow_html=True)
+
+# Exibição dos KPIs e gráficos
 if not df.empty:
-    st.subheader("\U0001F4CA Indicadores por Categoria")
+    st.markdown("### Indicadores por Categoria")
     col_kpis = st.columns(min(len(df['categoria'].unique()), 4))
 
     for i, cat in enumerate(df['categoria'].unique()):
@@ -139,59 +187,24 @@ if not df.empty:
                     <div class='kpi-meta'>Meta: {meta:.0f}</div>
                     <div class='kpi-resultado'>Resultado: {resultado:.0f}</div>
                     <progress value='{perc}' max='100' style='width:100%; height: 18px;'></progress>
-                    <div style='text-align:center; font-size:14px; margin-top:5px;'>{perc:.1f}% da meta</div>
+                    <div class='progress-highlight'>{perc:.1f}% da meta</div>
                 </div>
             """, unsafe_allow_html=True)
 
-    st.markdown("---")
-
-    df_comparativo = (
-        df.groupby('nome_comercial', as_index=False)
-          .agg(meta=('meta', 'sum'), resultado=('resultado', 'sum'))
-    )
-
-    def calc_perc(row):
-        try:
-            return (row['resultado'] / row['meta'] * 100) if row['meta'] > 0 else 0
-        except ZeroDivisionError:
-            return 0
-
-    df_comparativo['perc_atingido'] = df_comparativo.apply(calc_perc, axis=1)
-    df_comparativo = df_comparativo.sort_values('perc_atingido', ascending=False).reset_index(drop=True)
-
-    cor_padrao = 'rgba(58, 134, 255, 0.8)'
+    df_comparativo = df.groupby('nome_comercial', as_index=False).agg(meta=('meta', 'sum'), resultado=('resultado', 'sum'))
+    df_comparativo['perc_atingido'] = df_comparativo.apply(lambda row: calcular_percentual(row['meta'], row['resultado']), axis=1)
 
     fig2 = go.Figure()
-
     for _, row in df_comparativo.iterrows():
         fig2.add_trace(go.Bar(
             x=[row['nome_comercial']],
             y=[row['perc_atingido']],
-            marker=dict(color=cor_padrao),
+            marker=dict(color='#295148'),
             text=f"{row['perc_atingido']:.1f}%",
-            textposition='outside',
-            textfont=dict(size=14, color='black', family='Arial'),
-            hovertemplate=(
-                f"<b>{row['nome_comercial']}</b><br>"
-                f"Meta: {row['meta']:.0f}<br>"
-                f"Resultado: {row['resultado']:.0f}<br>"
-                f"% da Meta: {row['perc_atingido']:.1f}%<extra></extra>"
-            ),
-            width=0.5
+            textposition='outside'
         ))
+    fig2.update_layout(title="Ranking por Comercial", yaxis=dict(range=[0, 120], ticksuffix='%'))
 
-    fig2.update_layout(
-        barmode='group',
-        yaxis=dict(range=[0, 120], ticksuffix='%', showgrid=False, title=''),
-        xaxis=dict(title='', tickangle=0),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color="#333", size=13),
-        showlegend=False,
-        margin=dict(t=40, b=100)
-    )
-
-    # Gráfico de linha com preenchimento e mês por nome
     df_linha = (
         df.groupby(['mes_ano', 'mes'], as_index=False)
         .agg(meta=('meta', 'sum'), resultado=('resultado', 'sum'))
@@ -201,69 +214,16 @@ if not df.empty:
     melhor_mes = df_linha.loc[df_linha['perc'].idxmax()]
 
     fig3 = go.Figure()
-    fig3.add_trace(go.Scatter(
-        x=df_linha['mes'],
-        y=df_linha['meta'],
-        mode='lines+markers',
-        name='Meta',
-        line=dict(color='rgba(239, 71, 111, 1)', width=3),
-        fill='tozeroy',
-        fillcolor='rgba(239, 71, 111, 0.1)'
-    ))
-    fig3.add_trace(go.Scatter(
-        x=df_linha['mes'],
-        y=df_linha['resultado'],
-        mode='lines+markers',
-        name='Resultado',
-        line=dict(color='rgba(0, 206, 201, 1)', width=3),
-        fill='tozeroy',
-        fillcolor='rgba(0, 206, 201, 0.1)'
-    ))
-    fig3.add_vline(x=melhor_mes['mes'], line_width=2, line_dash="dash", line_color="green")
-    fig3.update_layout(
-        title="\U0001F4C8 Evolução Mensal - Meta x Resultado",
-        xaxis_title="Mês",
-        yaxis_title="Valor",
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color="#333", size=13),
-        hovermode='x unified'
-    )
+    fig3.add_trace(go.Scatter(x=df_linha['mes'], y=df_linha['meta'], name='Meta', fill='tozeroy', line=dict(color='#C1FBAD')))
+    fig3.add_trace(go.Scatter(x=df_linha['mes'], y=df_linha['resultado'], name='Resultado', fill='tozeroy', line=dict(color='#295148')))
+    fig3.add_vline(x=melhor_mes['mes'], line_dash="dash", line_color="#192B23")
+    fig3.update_layout(title="Evolução Mensal", hovermode='x unified')
 
-    col_left, col_right = st.columns([1, 1])
-
-    with col_left:
-        st.markdown("""
-            <div class='kpi-box'>
-                <div class='kpi-title'>\U0001F465 Ranking dos Comerciais por % da Meta Atingida</div>
-        """, unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
         st.plotly_chart(fig2, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with col_right:
-        st.markdown("""
-            <div class='kpi-box'>
-                <div class='kpi-title'>\U0001F4C8 Análise Mensal</div>
-        """
-        , unsafe_allow_html=True)
+    with col2:
         st.plotly_chart(fig3, use_container_width=True)
-        st.markdown(f"<div style='text-align:center; font-size:14px;'>\U0001F389 Melhor desempenho: <b>{melhor_mes['mes']}</b> com <b>{melhor_mes['perc']:.1f}%</b> da meta atingida</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-    st.markdown("<div class='export-button'>", unsafe_allow_html=True)
-    output = BytesIO()
-    df_export = df.copy()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df_export.to_excel(writer, index=False, sheet_name='Relatorio')
-    st.download_button(
-        label="\U0001F4BE Exportar Relatório XLSX",
-        data=output.getvalue(),
-        file_name="relatorio_metas.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
-
+        st.markdown(f"<div style='text-align:center; font-size:14px;'>Melhor mês: <b>{melhor_mes['mes']}</b> com <b>{melhor_mes['perc']:.1f}%</b></div>", unsafe_allow_html=True)
 else:
-    st.info("Aplique algum filtro ou verifique se existem dados para os filtros selecionados.")
-
-st.markdown("</div>", unsafe_allow_html=True)
+    st.warning("Aplique algum filtro ou verifique se há dados disponíveis para os critérios selecionados.")
