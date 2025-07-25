@@ -4,6 +4,7 @@ from db import get_connection
 from utils import calcular_percentual
 import plotly.graph_objects as go
 from io import BytesIO
+from style import *
 
 # Configuração da página
 st.set_page_config(page_title="Painel Comercial FFH", layout="wide")
@@ -14,6 +15,10 @@ st.markdown("""
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Garamond');
 
+        * {
+            transition: all ease-in-out;
+        } 
+        
         html, body, [class*="css"] {
             font-family: 'Inter', sans-serif;
             background-color: #F1F5FA;
@@ -138,7 +143,7 @@ if filtros['descricao_meta'] != "Todos":
 # Sidebar com logo, filtros e exportação
 with st.sidebar:
     
-    st.image("vertical verde.png", width=120)
+    st.image(LOGO_PATH, width=120)
 
 
     st.markdown("### Filtros")

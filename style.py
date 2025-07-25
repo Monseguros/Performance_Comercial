@@ -6,4 +6,4 @@ TEXT_COLOR = "#FFFFFF"     # Branco para contraste
 HIGHLIGHT_COLOR = "#4CAF50"  # Verde claro para destaque
 
 # Caminho relativo da imagem do logo
-LOGO_PATH = Path("images/Vertical verde.png")
+LOGO_PATH = Path("Vertical verde.png")
